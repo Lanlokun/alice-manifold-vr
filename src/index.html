@@ -6,13 +6,17 @@
     <script src="https://unpkg.com/aframe-environment-component@1.3.1/dist/aframe-environment-component.min.js"></script>
     <style>
         :root { --accent: #00f2ff; --warn: #ff0055; --bg: rgba(5, 7, 12, 0.9); }
-        body { font-family: 'Inter', sans-serif; margin: 0; background: #000; color: #fff; }
+        body { font-family: 'Inter', sans-serif; margin: 0; background: #000; color: #fff; overflow: hidden; }
         
         #dashboard {
-            position: absolute; top: 20px; left: 20px; z-index: 1000;
+            position: fixed; top: 20px; left: 20px; 
             width: 360px; background: var(--bg); padding: 25px; 
             border-radius: 15px; border: 1px solid rgba(255,255,255,0.1);
             box-shadow: 0 0 30px rgba(0, 242, 255, 0.2); backdrop-filter: blur(15px);
+            /* LAYER FIXES */
+            z-index: 999999 !important;
+            pointer-events: all !important;
+            user-select: none;
         }
 
         .label { font-size: 10px; text-transform: uppercase; color: var(--accent); letter-spacing: 2px; margin-bottom: 10px; }
@@ -32,6 +36,8 @@
         }
         .divergence-alert { color: var(--warn); font-weight: bold; animation: blink 1s infinite; }
         @keyframes blink { 0% {opacity:1;} 50% {opacity:0.3;} 100% {opacity:1;} }
+
+        .a-canvas { z-index: 1 !important; position: absolute; }
     </style>
   </head>
   <body>
@@ -52,7 +58,7 @@
         </div>
 
         <div class="btn-grid">
-            <button onclick="jumpTo(60)" style="border-color: #ffaa00; color: #ffaa00;">Zone 1: The Fall</button>
+            <button onclick="jumpTo(66)" style="border-color: #ffaa00; color: #ffaa00;">Zone 1: The Fall</button>
             <button onclick="jumpTo(326)" style="border-color: #ae00ff; color: #ae00ff;">Zone 2: Tears</button>
         </div>
 
@@ -62,13 +68,13 @@
         </div>
     </div>
 
-    <audio id="aliceAudio" src="alice_audio.wav" preload="auto"></audio>
+    <audio id="aliceAudio" src="../data/alice_audio.wav" preload="auto"></audio>
 
     <a-scene background="color: #000" renderer="colorManagement: true; antialias: true;">
       <a-entity environment="preset: stars; dressingAmount: 0; grid: none; shadow: false;"></a-entity>
 
       <a-entity id="rig" position="0 1.6 5">
-        <a-entity camera look-controls wasd-controls>
+        <a-entity id="mainCamera" camera look-controls="pointerLockEnabled: false" wasd-controls>
             <a-text id="hud" value="" position="0 -0.8 -1.2" scale="0.2 0.2 0.2" align="center" color="#00f2ff"></a-text>
         </a-entity>
       </a-entity>
@@ -88,126 +94,185 @@
       </a-entity>
     </a-scene>
 
-    <script>
-        const audio = document.getElementById('aliceAudio');
-        const timeline = document.getElementById('timeline');
-        const driftDisplay = document.getElementById('drift-val');
-        const currentTimeLabel = document.getElementById('current-time');
-        const trDisplay = document.getElementById('current-tr');
-        const milestoneLabel = document.getElementById('milestone-text');
-        const traceContainer = document.getElementById('trace-container');
-        const hud = document.getElementById('hud');
-        
-        let aliceData = [];
-        const trDuration = 1.5;
+   <script>
+    const audio = document.getElementById('aliceAudio');
+    const timeline = document.getElementById('timeline');
+    const driftDisplay = document.getElementById('drift-val');
+    const currentTimeLabel = document.getElementById('current-time');
+    const trDisplay = document.getElementById('current-tr');
+    const milestoneLabel = document.getElementById('milestone-text');
+    const traceContainer = document.getElementById('trace-container');
+    const hud = document.getElementById('hud');
+    const cameraEntity = document.getElementById('mainCamera');
+    
+    let aliceData = [];
+    const trDuration = 1.5;
+    
+    // --- THE ABSOLUTE STATE MACHINE ---
+    let state = {
+        isUserSeeking: false,
+        lastValidTR: 0,
+        playheadNeedsSync: false
+    };
 
-        fetch('alice_vr_data.json').then(r => r.json()).then(data => {
-            aliceData = data;
-            initSim();
+    fetch('../data/alice_vr_data.json').then(r => r.json()).then(data => {
+        aliceData = data;
+        initSim();
+    });
+
+    function formatTime(s) {
+        return `${Math.floor(s/60).toString().padStart(2,'0')}:${Math.floor(s%60).toString().padStart(2,'0')}`;
+    }
+
+    function initSim() {
+        // Toggle Play/Pause
+        document.getElementById('playBtn').addEventListener('click', function() {
+            if(audio.paused) { 
+                // FORCE SYNC ON RESUME
+                audio.currentTime = timeline.value * trDuration;
+                audio.play(); 
+                this.innerText = "PAUSE SYNC"; 
+            } else { 
+                audio.pause(); 
+                this.innerText = "RESUME SYNC"; 
+            }
         });
 
-        function formatTime(s) {
-            return `${Math.floor(s/60).toString().padStart(2,'0')}:${Math.floor(s%60).toString().padStart(2,'0')}`;
-        }
+        // 1. HARD INPUT LOCK
+        timeline.addEventListener('mousedown', () => { 
+            state.isUserSeeking = true; 
+        });
 
-        function initSim() {
-            document.getElementById('playBtn').addEventListener('click', function() {
-                if(audio.paused) { audio.play(); this.innerText = "PAUSE SYNC"; }
-                else { audio.pause(); this.innerText = "RESUME SYNC"; }
-            });
+        timeline.addEventListener('input', (e) => {
+            state.isUserSeeking = true;
+            let tr = e.target.value;
+            trDisplay.innerText = `TR ${tr}`;
+            currentTimeLabel.innerText = formatTime(tr * trDuration);
+        });
 
-            timeline.addEventListener('input', (e) => {
-                audio.currentTime = e.target.value * trDuration;
-                traceContainer.innerHTML = ''; // Wipe history for clear re-entry
-            });
+        timeline.addEventListener('change', (e) => {
+            const targetTime = e.target.value * trDuration;
+            traceContainer.innerHTML = '';
+            
+            // Perform the hardware jump
+            audio.currentTime = targetTime;
+            
+            // DON'T unlock yet. Wait for the 'seeked' hardware event.
+            state.playheadNeedsSync = true;
+        });
 
-            function syncLoop() {
-                let tr = Math.floor(audio.currentTime / trDuration);
+        // 2. HARDWARE FEEDBACK LOOP
+        audio.addEventListener('seeking', () => { state.isUserSeeking = true; });
+        audio.addEventListener('seeked', () => {
+            // Only release the lock after the audio hardware confirms it's finished
+            setTimeout(() => {
+                state.isUserSeeking = false;
+                state.playheadNeedsSync = false;
+            }, 150); 
+        });
+
+        // 3. THE SYNC ENGINE
+        function syncLoop() {
+            let currentAudioTime = audio.currentTime;
+            let currentTR = Math.floor(currentAudioTime / trDuration);
+
+            // AVOID "THE SNAP": 
+            // If the audio suddenly reports 0 but we know we were just at TR 60, ignore it.
+            if(currentTR === 0 && !audio.paused && state.lastValidTR > 5 && !state.isUserSeeking) {
+                // Ignore glitchy 0-resets
+            } else {
+                if(!state.isUserSeeking) {
+                    state.lastValidTR = currentTR;
+                }
+            }
+
+            if(currentTR < aliceData.length) {
+                const d = aliceData[state.lastValidTR];
                 
-                if(tr < aliceData.length) {
-                    const d = aliceData[tr];
-                    
-                    // UI & Labels
-                    timeline.value = tr;
-                    trDisplay.innerText = `TR ${tr}`;
-                    currentTimeLabel.innerText = formatTime(audio.currentTime);
+                // Only update the slider if the user isn't touching it and hardware is ready
+                if (!audio.paused && !state.isUserSeeking) {
+                    timeline.value = state.lastValidTR;
+                    trDisplay.innerText = `TR ${state.lastValidTR}`;
+                    currentTimeLabel.innerText = formatTime(currentAudioTime);
+                }
+
+                if (d) {
                     driftDisplay.innerText = d.drift.toFixed(5);
-                    
-                    // Position Orbs
                     document.getElementById('cursor18').setAttribute('position', `${d.x18_vr} ${d.y18_vr} ${d.z18_vr}`);
                     document.getElementById('cursor23').setAttribute('position', `${d.x23_vr} ${d.y23_vr} ${d.z23_vr}`);
 
-                    // 1. ORGANIC TRACE: Instead of dots, we drop fading cubes
-                    if(!audio.paused) {
+                    // Only drop voxels if we are in a stable play state
+                    if (!audio.paused && !state.isUserSeeking) {
                         dropFadingVoxel(d.x18_vr, d.y18_vr, d.z18_vr, '#00f2ff');
                         dropFadingVoxel(d.x23_vr, d.y23_vr, d.z23_vr, '#ff0055');
-                        
-                        // 2. NEON TETHERS: Lightning arcs for divergence
-                        if(d.drift > 0.05) {
-                            renderNeonTether(d);
-                        }
+                        if(d.drift > 0.05) renderNeonTether(d);
                     }
-
-                    // 3. ANALYTICAL HUD (Based on your discoveries)
-                    updateMilestones(tr, d.drift);
+                    updateMilestones(state.lastValidTR, d.drift);
                 }
-                requestAnimationFrame(syncLoop);
             }
-            syncLoop();
+            requestAnimationFrame(syncLoop);
         }
+        syncLoop();
+    }
 
-        function dropFadingVoxel(x, y, z, color) {
-            let p = document.createElement('a-box');
-            p.setAttribute('position', `${x} ${y} ${z}`);
-            p.setAttribute('scale', '0.005 0.005 0.005');
-            p.setAttribute('material', {color: color, emissive: color, emissiveIntensity: 2, opacity: 0.3, transparent: true});
-            traceContainer.appendChild(p);
-            
-            // Auto-fade logic (Realistic temporal decay)
-            setTimeout(() => { if(p.parentNode) p.parentNode.removeChild(p); }, 20000); 
+    // --- REPLACED WINDOW FUNCTIONS TO AVOID NAMESPACE CONFLICTS ---
+    window.jumpTo = function(tr) {
+        state.isUserSeeking = true;
+        timeline.value = tr;
+        audio.currentTime = tr * trDuration;
+        traceContainer.innerHTML = '';
+        audio.play();
+        document.getElementById('playBtn').innerText = "PAUSE SYNC";
+    };
+
+    window.resetSim = function() {
+        state.isUserSeeking = true;
+        audio.pause();
+        audio.currentTime = 0;
+        timeline.value = 0;
+        state.lastValidTR = 0;
+        traceContainer.innerHTML = '';
+        document.getElementById('playBtn').innerText = "INITIALIZE SYNC";
+        setTimeout(() => { state.isUserSeeking = false; }, 500);
+    };
+
+    function dropFadingVoxel(x, y, z, color) {
+        let p = document.createElement('a-box');
+        p.setAttribute('position', `${x} ${y} ${z}`);
+        p.setAttribute('scale', '0.005 0.005 0.005');
+        p.setAttribute('material', {color: color, emissive: color, emissiveIntensity: 2, opacity: 0.3, transparent: true});
+        traceContainer.appendChild(p);
+        setTimeout(() => { if(p.parentNode) p.parentNode.removeChild(p); }, 20000); 
+    }
+
+    function renderNeonTether(d) {
+        let line = document.createElement('a-entity');
+        line.setAttribute('line', {
+            start: `${d.x18_vr} ${d.y18_vr} ${d.z18_vr}`,
+            end: `${d.x23_vr} ${d.y23_vr} ${d.z23_vr}`,
+            color: '#ffffff',
+            opacity: 0.5
+        });
+        line.setAttribute('animation', 'property: components.line.material.opacity; from: 0.5; to: 0.1; dir: alternate; dur: 50; loop: true');
+        traceContainer.appendChild(line);
+        setTimeout(() => { if(line.parentNode) line.parentNode.removeChild(line); }, 1500);
+    }
+
+    function updateMilestones(tr, drift) {
+        if (tr >= 13 && tr <= 15) {
+            milestoneLabel.innerHTML = `<span class="divergence-alert">00:20 - NARRATIVE ONSET</span>`;
+            hud.setAttribute('value', "NARRATIVE ONSET: INITIAL SPLIT");
+        } else if (tr >= 66 && tr <= 70) {
+            milestoneLabel.innerHTML = `<span class="divergence-alert">01:39 - PEAK DRIFT (THE FALL)</span>`;
+            hud.setAttribute('value', `MAX DIVERGENCE: ${drift.toFixed(4)}`);
+        } else if (tr >= 326 && tr <= 330) {
+            milestoneLabel.innerHTML = `<span class="divergence-alert">08:09 - MICRO-BURST FRUSTRATION</span>`;
+            hud.setAttribute('value', "ZONE 2: COGNITIVE FRUSTRATION");
+        } else {
+            milestoneLabel.innerText = "STATE: STABLE ALIGNMENT";
+            hud.setAttribute('value', "");
         }
-
-        function renderNeonTether(d) {
-            let line = document.createElement('a-entity');
-            line.setAttribute('line', {
-                start: `${d.x18_vr} ${d.y18_vr} ${d.z18_vr}`,
-                end: `${d.x23_vr} ${d.y23_vr} ${d.z23_vr}`,
-                color: '#ffffff',
-                opacity: 0.5
-            });
-            // Flickering animation for "Neural Tension"
-            line.setAttribute('animation', 'property: components.line.material.opacity; from: 0.5; to: 0.1; dir: alternate; dur: 50; loop: true');
-            traceContainer.appendChild(line);
-            setTimeout(() => { if(line.parentNode) line.parentNode.removeChild(line); }, 1500);
-        }
-
-        function updateMilestones(tr, drift) {
-            if (tr >= 13 && tr <= 15) {
-                milestoneLabel.innerHTML = `<span class="divergence-alert">00:20 - NARRATIVE ONSET</span>`;
-                hud.setAttribute('value', "NARRATIVE ONSET: INITIAL SPLIT");
-            } else if (tr >= 66 && tr <= 70) {
-                milestoneLabel.innerHTML = `<span class="divergence-alert">01:39 - PEAK DRIFT (THE FALL)</span>`;
-                hud.setAttribute('value', `MAX DIVERGENCE: ${drift.toFixed(4)}`);
-            } else if (tr >= 326 && tr <= 330) {
-                milestoneLabel.innerHTML = `<span class="divergence-alert">08:09 - MICRO-BURST FRUSTRATION</span>`;
-                hud.setAttribute('value', "ZONE 2: COGNITIVE FRUSTRATION");
-            } else {
-                milestoneLabel.innerText = "STATE: STABLE ALIGNMENT";
-                hud.setAttribute('value', "");
-            }
-        }
-
-        window.jumpTo = (tr) => {
-            audio.currentTime = tr * trDuration;
-            traceContainer.innerHTML = '';
-            audio.play();
-        };
-
-        window.resetSim = () => {
-            audio.currentTime = 0;
-            traceContainer.innerHTML = '';
-            audio.pause();
-        };
-    </script>
+    }
+</script>
   </body>
 </html>
