@@ -1,0 +1,306 @@
+:root { 
+    --accent: #00f2ff; 
+    --warn: #ff0055; 
+    --bg: rgba(5, 7, 12, 0.96); 
+}
+
+body { 
+    font-family: 'Inter', sans-serif; 
+    margin: 0; 
+    background: #000; 
+    color: #fff; 
+    overflow: hidden; 
+}
+
+#dashboard {
+    position: fixed; 
+    top: 20px; 
+    left: 20px; 
+    width: 340px; 
+    background: var(--bg); 
+    padding: 25px; 
+    border-radius: 15px;
+    border: 1px solid rgba(255,255,255,0.1); 
+    backdrop-filter: blur(20px);
+    z-index: 999999; 
+    pointer-events: all; 
+    max-height: 90vh; 
+    overflow-y: auto;
+    box-shadow: 0 0 40px rgba(0, 242, 255, 0.2);
+}
+
+.label { 
+    font-size: 9px; 
+    text-transform: uppercase; 
+    color: var(--accent); 
+    letter-spacing: 2px; 
+    margin-bottom: 8px; 
+    margin-top: 12px; 
+}
+
+input[type=range] { 
+    width: 100%; 
+    accent-color: var(--accent); 
+    cursor: pointer; 
+}
+
+#audio-viz {
+    width: 100%; 
+    height: 45px; 
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px; 
+    overflow: hidden; 
+    display: flex; 
+    align-items: flex-end; 
+    padding: 2px;
+    gap: 1px;
+}
+
+/* Subject Management Styles */
+.subject-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 8px;
+    background: rgba(0,0,0,0.2);
+}
+
+.subject-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px;
+    margin-bottom: 5px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 6px;
+    border-left: 3px solid;
+    transition: all 0.3s ease;
+}
+
+.subject-item:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.subject-item.hidden {
+    opacity: 0.4;
+    background: rgba(255,255,255,0.02);
+}
+
+.subject-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subject-color-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.3);
+}
+
+.subject-name {
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.subject-controls {
+    display: flex;
+    gap: 4px;
+}
+
+.subject-btn {
+    padding: 2px 6px;
+    font-size: 9px;
+    border: 1px solid rgba(255,255,255,0.3);
+    background: transparent;
+    color: #fff;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.subject-btn:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.subject-btn.remove {
+    border-color: var(--warn);
+    color: var(--warn);
+}
+
+.subject-btn.remove:hover {
+    background: var(--warn);
+}
+
+/* Dialog Styles */
+.dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000000;
+}
+
+.dialog-content {
+    background: var(--bg);
+    padding: 30px;
+    border-radius: 15px;
+    border: 1px solid rgba(255,255,255,0.2);
+    min-width: 300px;
+    max-width: 400px;
+}
+
+.dialog-content h3 {
+    margin: 0 0 20px 0;
+    color: var(--accent);
+    font-size: 16px;
+    text-align: center;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 11px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 6px;
+    color: #fff;
+    font-size: 12px;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: rgba(255,255,255,0.08);
+}
+
+.dialog-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.dialog-buttons button {
+    flex: 1;
+    padding: 10px;
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    color: #000;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.dialog-buttons button:hover {
+    background: #fff;
+}
+
+.dialog-buttons button:last-child {
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+}
+
+.dialog-buttons button:last-child:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+#audio-viz {
+    display: flex; 
+    align-items: flex-end; 
+    gap: 2px; 
+    margin-top: 5px;
+    border-radius: 4px; 
+    overflow: hidden; 
+    padding: 2px; 
+    border: 1px solid rgba(0,242,255,0.1);
+}
+
+.viz-bar { 
+    flex: 1; 
+    background: var(--accent); 
+    min-height: 2px; 
+    transition: height 0.05s ease; 
+    opacity: 0.8; 
+}
+
+.btn-grid { 
+    display: grid; 
+    grid-template-columns: 1fr 1fr; 
+    gap: 8px; 
+    margin-top: 10px; 
+}
+
+.tri-grid { 
+    display: grid; 
+    grid-template-columns: 1fr 1fr 1fr; 
+    gap: 5px; 
+    margin-top: 5px; 
+}
+
+button { 
+    padding: 10px; 
+    border: 1px solid var(--accent); 
+    border-radius: 6px; 
+    background: transparent; 
+    color: var(--accent); 
+    font-weight: bold;
+    cursor: pointer; 
+    transition: 0.2s; 
+    text-transform: uppercase; 
+    font-size: 9px;
+}
+
+button:hover { 
+    background: var(--accent); 
+    color: #000; 
+    box-shadow: 0 0 15px var(--accent); 
+}
+
+.live-stats { 
+    font-family: monospace; 
+    font-size: 11px; 
+    margin-top: 15px; 
+    padding: 12px; 
+    background: rgba(0,0,0,0.6); 
+    border-radius: 5px;
+    line-height: 1.6; 
+    border-left: 2px solid var(--accent);
+}
+
+.stat-val { 
+    color: var(--accent); 
+    float: right; 
+}
+
+.divergence-alert { 
+    color: var(--warn); 
+    font-weight: bold; 
+    animation: blink 1s infinite; 
+}
+
+@keyframes blink { 
+    0% {opacity:1;} 
+    50% {opacity:0.3;} 
+    100% {opacity:1;} 
+}

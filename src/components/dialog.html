@@ -1,0 +1,26 @@
+<!-- Add Subject Dialog -->
+<div id="add-subject-dialog" class="dialog" style="display: none;">
+    <div class="dialog-content">
+        <h3>Add New Subject</h3>
+        <div class="form-group">
+            <label>Subject ID:</label>
+            <input type="text" id="new-subject-id" placeholder="e.g., 26">
+        </div>
+        <div class="form-group">
+            <label>Subject Name:</label>
+            <input type="text" id="new-subject-name" placeholder="e.g., Subject 26">
+        </div>
+        <div class="form-group">
+            <label>Color:</label>
+            <input type="color" id="new-subject-color" value="#ff00ff">
+        </div>
+        <div class="form-group">
+            <label>Data Prefix:</label>
+            <input type="text" id="new-subject-prefix" placeholder="e.g., 26_vr">
+        </div>
+        <div class="dialog-buttons">
+            <button onclick="addNewSubject()">Add Subject</button>
+            <button onclick="hideAddSubjectDialog()">Cancel</button>
+        </div>
+    </div>
+</div>

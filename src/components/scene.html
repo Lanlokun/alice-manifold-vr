@@ -1,0 +1,26 @@
+<a-scene background="color: #010205" renderer="antialias: true; logarithmicDepthBuffer: true;" screenshot>
+    <a-grid material="color: #1a1a2e; opacity: 0.1; transparent: true;"></a-grid>
+
+    <a-entity id="brain-system" position="0 1.6 -4" animation="property: rotation; to: 0 360 0; dur: 120000; easing: linear; loop: true">
+        <a-entity id="brain-shell" 
+                geometry="primitive: sphere; radius: 2.3; segmentsWidth: 64; segmentsHeight: 64"
+                material="color: #00f2ff; emissive: #00f2ff; emissiveIntensity: 0.5; opacity: 0.08; transparent: true; wireframe: true; side: double; depthWrite: false;">
+        </a-entity>
+        <a-entity id="brain-core" 
+                geometry="primitive: sphere; radius: 2.1"
+                material="color: #4cc3ff; opacity: 0.03; transparent: true; side: back; depthWrite: false;">
+        </a-entity>
+
+      <a-entity id="simulation-space" scale="4.5 4.5 4.5">
+        <a-sphere id="llm-master" radius="0.02" color="#FFD700" material="emissive: #FFD700; emissiveIntensity: 2"></a-sphere>
+        
+        <a-entity id="cursors-container"></a-entity>
+        
+        <a-entity id="trace-container"></a-entity>
+    </a-entity>
+    </a-entity>
+
+    <a-entity id="rig" position="0 0 5">
+        <a-camera look-controls wasd-controls></a-camera>
+    </a-entity>
+</a-scene>
