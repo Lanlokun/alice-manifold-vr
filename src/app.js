@@ -29,7 +29,7 @@ const maxHistory = 40; // Number of TRs to display on the graph
 
 // Multi-Subject Registry
 let subjects = {};          // { filename: subjectArray }
-let activeSubject = null;   // key of currently selected subject
+let activeSubjectId = 'subject18'; // Matches your config ID
 
 // Constants
 const trDuration = 1.5;
@@ -335,11 +335,19 @@ function initAudioEngine() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         analyser = audioCtx.createAnalyser();
+        
+        // This connects the HTML5 audio element to the Web Audio graph
         source = audioCtx.createMediaElementSource(elements.audio);
         source.connect(analyser);
         analyser.connect(audioCtx.destination);
+        
         analyser.fftSize = 64;
         dataArray = new Uint8Array(analyser.frequencyBinCount);
+    }
+
+    // Force wake up
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
     }
 }
 
@@ -354,12 +362,21 @@ function initializeVisualizationBars() {
 }
 
 // Main Simulation Loop
+let isLoopRunning = false; // Add to top of app.js
+
 function simulationLoop() {
-    if (!subjectData.length) return;
+    if (!subjectData || !subjectData.length) return;
     
-    updateAudioVisualization();
-    updateDataVisualization();
+    isLoopRunning = true; // Mark as running
+
+    try {
+        updateAudioVisualization();
+        updateDataVisualization();
+    } catch (err) {
+        console.warn("Loop error caught:", err);
+    }
     
+    // The browser handles the timing here
     requestAnimationFrame(simulationLoop);
 }
 
@@ -389,31 +406,38 @@ function updateBrainShellPulse(sum) {
 }
 
 function updateDataVisualization() {
+    // 1. Calculate TR based on audio time
     let tr = Math.floor(elements.audio.currentTime / trDuration);
 
-    if(tr < subjectData.length) {
+    if(subjectData && subjectData[tr]) {
         const d = subjectData[tr];
         
         updateTimelineDisplay(tr);
+
+        // 2. MOVE LLM MASTER (The Silicon Mirror)
+        const llmMaster = document.getElementById('llm-master');
+        if (llmMaster && d.xllm_vr !== undefined) {
+            // Using your specific merged keys: xllm_vr, yllm_vr, zllm_vr
+            llmMaster.setAttribute('position', {
+                x: d.xllm_vr,
+                y: d.yllm_vr,
+                z: d.zllm_vr
+            });
+        }
+
+        // 3. MOVE HUMAN SUBJECTS (The Carbon Path)
         updateCursorPositions(d);
         
-        // GEN 5 UPDATE: 
-        // We now calculate drift specifically against the LLM baseline
-        // rather than just a general inter-subject average.
+        // 4. ALIGNMENT ANALYSIS
         updateDriftAnalysis(d, tr);
         
         if (!elements.audio.paused && !state.seeking) {
-            // 1. Drop existing temporary human voxels (Biological Path)
             dropVoxels(d);
-
-            // 2. INTEGRATION: Render the "Ghost Path" (Silicon Mirror)
-            // This projects the LLM's latent trajectory into the future
-            // based on the upcoming narrative text.
+            // Predictions based on the next TRs in this merged file
             renderGhostPath(subjectData, tr);
         }
     }
 }
-
 function updateTimelineDisplay(tr) {
     if (!elements.audio.paused && !state.seeking) {
         elements.timeline.value = tr;
@@ -423,122 +447,124 @@ function updateTimelineDisplay(tr) {
 }
 
 function updateCursorPositions(dataPoint) {
-    const subjects = SUBJECTS_CONFIG.getAllSubjects();
+    const subjectsList = SUBJECTS_CONFIG.getAllSubjects();
     
-    subjects.forEach(subject => {
-        // Only update if subject is visible
+    subjectsList.forEach(subject => {
         if (!visibleSubjects.has(subject.id)) return;
         
         const fields = SUBJECTS_CONFIG.getDataFields(subject);
         const cursor = document.getElementById(subject.id);
         
+        // DEBUG: Log one time to see if keys match
+        if (state.lastTR === -1) {
+             console.log(`Checking ${subject.id}: looking for key ${fields.x}. Found value:`, dataPoint[fields.x]);
+        }
+
         if (cursor && dataPoint[fields.x] !== undefined) {
-            cursor.setAttribute('position', 
-                `${dataPoint[fields.x]} ${dataPoint[fields.y]} ${dataPoint[fields.z]}`
-            );
+            cursor.setAttribute('position', {
+                x: parseFloat(dataPoint[fields.x]),
+                y: parseFloat(dataPoint[fields.y]),
+                z: parseFloat(dataPoint[fields.z])
+            });
+        } else {
+            // If the data is missing, move it far away so it doesn't clutter the center
+            if (cursor) cursor.setAttribute('position', '0 -10 0');
         }
     });
 }
 
 function updateDriftAnalysis(d, tr) {
-    // 1. Per-TR Calculations (Velocity and History)
-    if (tr !== state.lastTR) {
-        const subjects = SUBJECTS_CONFIG.getAllSubjects();
-        const visibleSubjectsList = subjects.filter(subject => visibleSubjects.has(subject.id));
-        
-        if (visibleSubjectsList.length > 0) {
-            let totalVelocity = 0;
-            let validVelocityCount = 0;
-            
-            visibleSubjectsList.forEach(subject => {
-                const fields = SUBJECTS_CONFIG.getDataFields(subject);
-                if (d[fields.x] === undefined) return;
-                
-                const currentPos = { x: d[fields.x], y: d[fields.y], z: d[fields.z] };
-                
-                if (state.lastPos[subject.id]) {
-                    const dist = Math.sqrt(
-                        Math.pow(currentPos.x - state.lastPos[subject.id].x, 2) + 
-                        Math.pow(currentPos.y - state.lastPos[subject.id].y, 2) + 
-                        Math.pow(currentPos.z - state.lastPos[subject.id].z, 2)
-                    );
-                    totalVelocity += dist;
-                    validVelocityCount++;
-                }
-                state.lastPos[subject.id] = currentPos;
-            });
-            
-            if (validVelocityCount > 0) {
-                elements.velocityDisplay.innerText = ((totalVelocity / validVelocityCount) * 10).toFixed(5);
+    if (!d) return;
+
+    let maxDrift = 0;
+    let furthestSubjectId = 'subject18';
+    
+    // 1. Find Max Drift (Existing logic is fine)
+    visibleSubjects.forEach(id => {
+        if (id === 'subject0_llm') return;
+        const s = SUBJECTS_CONFIG.getSubject(id);
+        const f = SUBJECTS_CONFIG.getDataFields(s);
+        if (d[f.x] !== undefined) {
+            const dist = Math.sqrt(
+                Math.pow(d.xllm_vr - d[f.x], 2) +
+                Math.pow(d.yllm_vr - d[f.y], 2) +
+                Math.pow(d.zllm_vr - d[f.z], 2)
+            );
+            if (dist > maxDrift) {
+                maxDrift = dist;
+                furthestSubjectId = id;
             }
         }
+    });
 
-        // Update History Buffer
-        driftHistory.push(d.drift);
+    // 2. ONLY CALCULATE VELOCITY WHEN THE DATA STEPS (TR change)
+    if (tr !== state.lastTR) {
+        const s = SUBJECTS_CONFIG.getSubject(furthestSubjectId);
+        const f = SUBJECTS_CONFIG.getDataFields(s);
+        const currentPos = { x: d[f.x], y: d[f.y], z: d[f.z] };
+
+        // Ensure state.lastPos exists
+        if (!state.lastPos) state.lastPos = {};
+
+        if (state.lastPos[furthestSubjectId]) {
+            const last = state.lastPos[furthestSubjectId];
+            const vel = Math.sqrt(
+                Math.pow(currentPos.x - last.x, 2) +
+                Math.pow(currentPos.y - last.y, 2) +
+                Math.pow(currentPos.z - last.z, 2)
+            );
+            
+            // Update the display only on the step
+            elements.velocityDisplay.innerText = vel.toFixed(5);
+        }
+        
+        // UPDATE CACHE FOR NEXT STEP
+        state.lastPos[furthestSubjectId] = currentPos;
+        
+        // --- History Logic ---
+        driftHistory.push(maxDrift);
         if (driftHistory.length > maxHistory) driftHistory.shift();
         renderDriftGraph();
         
-        state.lastTR = tr;
+        state.lastTR = tr; // Move this to the end of the block
     }
 
-    // 2. Continuous UI Updates
-    elements.driftDisplay.innerText = d.drift.toFixed(5);
+    // 3. UI Updates (Every Frame)
+    activeSubjectId = furthestSubjectId;
+    elements.driftDisplay.innerText = maxDrift.toFixed(5);
     
-    // Peak Tracking
-    if(d.drift > state.peakDrift) {
-        state.peakDrift = d.drift;
+    if (maxDrift > state.peakDrift) {
+        state.peakDrift = maxDrift;
         elements.peakDisplay.innerText = state.peakDrift.toFixed(5);
     }
 
-    // 3. Alignment Visual State
-    const isDiverged = d.drift > 0.05;
-    const themeColor = isDiverged ? '#ff0055' : '#00f2ff';
-    
-    elements.brainShell.setAttribute('material', 'color', themeColor);
-    
-    if (isDiverged) {
-        elements.milestoneLabel.innerHTML = `<span class="divergence-alert">HIGH DRIFT DETECTED</span>`;
+    if (maxDrift > 1.5) {
+        elements.milestoneLabel.innerHTML = `<span style="color: #ff4d00;">HIGH DIVERGENCE</span>`;
         renderTether(d);
     } else {
-        elements.milestoneLabel.innerText = "ALIGNED STATE";
+        elements.milestoneLabel.innerText = "ALIGNED";
     }
 }
+
 
 function renderDriftGraph() {
     const canvas = document.getElementById('driftCanvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const w = canvas.width;
-    const h = canvas.height;
-
-    ctx.clearRect(0, 0, w, h);
     
-    // Draw Background Grid
-    ctx.strokeStyle = '#1a1a2e';
-    ctx.lineWidth = 0.5;
+    // Clear and draw
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.beginPath();
-    for(let i = 0; i < h; i += 20) { ctx.moveTo(0, i); ctx.lineTo(w, i); }
-    ctx.stroke();
-
-    // Draw Drift Line
-    ctx.beginPath();
-    ctx.lineWidth = 2;
     ctx.strokeStyle = '#00f2ff';
-    
-    const step = w / (maxHistory - 1);
+    ctx.lineWidth = 2;
+
+    const step = canvas.width / (maxHistory - 1);
     driftHistory.forEach((val, i) => {
-        // Map drift value (0.0 to 0.1) to canvas height (60 to 0)
+        // Map drift value to canvas height (assuming max drift of 3.0)
+        const y = canvas.height - (val / 3.0) * canvas.height;
         const x = i * step;
-        const y = h - (Math.min(val, 0.1) * 10 * h);
-        
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
-
-        // Visual alert on graph if drift is high
-        if (val > 0.05) {
-            ctx.fillStyle = '#ff0055';
-            ctx.fillRect(x - 2, y - 2, 4, 4);
-        }
     });
     ctx.stroke();
 }
@@ -546,24 +572,45 @@ function renderDriftGraph() {
 
 
 // VR Rendering Functions
-function dropVoxels(dataPoint) {
-    const subjects = SUBJECTS_CONFIG.getAllSubjects();
+function dropVoxels(d) {
+    // Only drop if the High Divergence alert is currently active
+    const userThreshold = parseFloat(elements.thresholdSlider.value);
+    const currentDrift = parseFloat(elements.driftDisplay.innerText);
     
-    subjects.forEach(subject => {
-        // Only drop voxels for visible subjects
-        if (!visibleSubjects.has(subject.id)) return;
-        
-        const fields = SUBJECTS_CONFIG.getDataFields(subject);
-        
-        if (dataPoint[fields.x] !== undefined) {
-            dropVoxel(
-                dataPoint[fields.x], 
-                dataPoint[fields.y], 
-                dataPoint[fields.z], 
-                subject.color
-            );
-        }
+    if (currentDrift < userThreshold) return; 
+
+    const subject = SUBJECTS_CONFIG.getSubject(activeSubjectId);
+    const f = SUBJECTS_CONFIG.getDataFields(subject);
+
+    // Create the Voxel entity
+    const voxel = document.createElement('a-box');
+    voxel.setAttribute('width', '0.02');
+    voxel.setAttribute('height', '0.02');
+    voxel.setAttribute('depth', '0.02');
+    
+    // Position it at the outlier's current coordinates (with your offsets)
+    voxel.setAttribute('position', {
+        x: d[f.x] - (MANIFOLD_OFFSETS.x || 0),
+        y: d[f.y] - (MANIFOLD_OFFSETS.y || 0),
+        z: d[f.z] - (MANIFOLD_OFFSETS.z || 0)
     });
+
+    // Material: Glowing Red for errors
+    voxel.setAttribute('material', {
+        color: '#ff4d00',
+        emissive: '#ff4d00',
+        emissiveIntensity: 2,
+        opacity: 0.7,
+        transparent: true
+    });
+
+    // Add to your 3D container
+    elements.traceContainer.appendChild(voxel);
+
+    // PERSISTENCE: They stay for 30 seconds so you can see the "cloud"
+    setTimeout(() => {
+        if (voxel.parentNode) voxel.parentNode.removeChild(voxel);
+    }, 30000);
 }
 
 function dropVoxel(x, y, z, color) {
@@ -582,28 +629,19 @@ function dropVoxel(x, y, z, color) {
     setTimeout(() => { if(p.parentNode) p.parentNode.removeChild(p); }, 8000); 
 }
 
-function renderTether(dataPoint) {
-    const subjects = SUBJECTS_CONFIG.getAllSubjects();
-    
-    if (subjects.length >= 2) {
-        const subject1 = subjects[0];
-        const subject2 = subjects[1];
-        
-        const fields1 = SUBJECTS_CONFIG.getDataFields(subject1);
-        const fields2 = SUBJECTS_CONFIG.getDataFields(subject2);
-        
-        if (dataPoint[fields1.x] && dataPoint[fields2.x]) {
-            let line = document.createElement('a-entity');
-            line.setAttribute('line', {
-                start: `${dataPoint[fields1.x]} ${dataPoint[fields1.y]} ${dataPoint[fields1.z]}`, 
-                end: `${dataPoint[fields2.x]} ${dataPoint[fields2.y]} ${dataPoint[fields2.z]}`, 
-                color: '#ffffff', 
-                opacity: 0.3 
-            });
-            elements.traceContainer.appendChild(line);
-            setTimeout(() => { if(line.parentNode) line.parentNode.removeChild(line); }, 100);
-        }
-    }
+function renderTether(d) {
+    const subject = SUBJECTS_CONFIG.getSubject(activeSubjectId);
+    const fields = SUBJECTS_CONFIG.getDataFields(subject);
+
+    let line = document.createElement('a-entity');
+    line.setAttribute('line', {
+        start: `${d.xllm_vr} ${d.yllm_vr} ${d.zllm_vr}`, 
+        end: `${d[fields.x]} ${d[fields.y]} ${d[fields.z]}`, 
+        color: '#FFD700', // Silicon Gold
+        opacity: 0.6 
+    });
+    elements.traceContainer.appendChild(line);
+    setTimeout(() => { if(line.parentNode) line.parentNode.removeChild(line); }, 50);
 }
 
 // Control Functions
@@ -680,17 +718,27 @@ function setupEventListeners() {
     });
 
     // Play button
-    elements.playBtn.addEventListener('click', function() {
-        initAudioEngine();
-        if(audioCtx.state === 'suspended') audioCtx.resume();
-        if(elements.audio.paused) { 
-            elements.audio.play(); 
-            this.innerText = "PAUSE SYNC"; 
-        } else { 
-            elements.audio.pause(); 
-            this.innerText = "RESUME SYNC"; 
+elements.playBtn.addEventListener('click', function() {
+    // 1. Initialize and/or Resume the Audio Context
+    initAudioEngine();
+    
+    // 2. Wrap the play call in the resume promise
+    audioCtx.resume().then(() => {
+        if (elements.audio.paused) {
+            elements.audio.play().then(() => {
+                this.innerText = "PAUSE SYNC";
+                // Start the loop if it's not running
+                requestAnimationFrame(simulationLoop);
+            }).catch(err => {
+                console.error("Playback failed:", err);
+                elements.milestoneLabel.innerText = "ERROR: CLICK AGAIN TO UNMUTE";
+            });
+        } else {
+            elements.audio.pause();
+            this.innerText = "RESUME SYNC";
         }
     });
+});
 
     // Volume control
     elements.volume.addEventListener('input', (e) => elements.audio.volume = e.target.value);
@@ -703,6 +751,8 @@ function setupEventListeners() {
         state.seeking = false;
     });
 }
+
+
 function setupGraphInteraction() {
     const canvas = document.getElementById('driftCanvas');
     if (!canvas) return;
@@ -747,8 +797,10 @@ window.addEventListener('componentsReady', () => {
         .then(data => { 
             subjectData = Array.isArray(data) ? data : data.data; 
             if (elements.milestoneLabel) elements.milestoneLabel.innerText = "SYSTEM ONLINE: READY";
-            simulationLoop(); 
-        })
+            // Inside your fetch(...).then(...)
+            if (!isLoopRunning) {
+                simulationLoop();
+            }        })
         .catch(err => {
             console.error("Data load failed:", err);
             if (elements.milestoneLabel) elements.milestoneLabel.innerText = "SYSTEM READY: UPLOAD DATA";
@@ -760,27 +812,34 @@ window.addEventListener('componentsReady', () => {
 function updateDataVisualization() {
     let tr = Math.floor(elements.audio.currentTime / trDuration);
 
-    if(tr < subjectData.length) {
+    if (subjectData && subjectData[tr]) {
         const d = subjectData[tr];
         
         updateTimelineDisplay(tr);
         
-        // A. PERMANENT LLM UPDATE (The Silicon Mirror)
-        // We look for 'llm-master' directly to ensure it's treated as a baseline
+        // A. LLM MASTER UPDATE
         const llmMaster = document.getElementById('llm-master');
-        if (llmMaster) {
-            llmMaster.setAttribute('position', `${d.xllm_vr} ${d.yllm_vr} ${d.zllm_vr}`);
+        if (llmMaster && d.xllm_vr !== undefined) {
+            // Passing as an object is much more stable in A-Frame
+            llmMaster.setAttribute('position', {
+                x: d.xllm_vr, 
+                y: d.yllm_vr, 
+                z: d.zllm_vr
+            });
         }
 
-        // B. DYNAMIC HUMAN UPDATE (The Carbon Path)
-        updateCursorPositions(d);
-        
-        // C. ALIGNMENT ANALYSIS
-        updateDriftAnalysis(d, tr);
+        // B. DYNAMIC HUMAN UPDATE
+        try {
+            updateCursorPositions(d);
+            updateDriftAnalysis(d, tr);
+        } catch (e) {
+            console.warn("Soft error in analysis:", e);
+        }
         
         if (!elements.audio.paused && !state.seeking) {
             dropVoxels(d);
-            renderGhostPath(subjectData, tr);
+            // Only ghost if data is valid
+            if (d.xllm_vr !== undefined) renderGhostPath(subjectData, tr);
         }
     }
 }

@@ -23,6 +23,8 @@ export function simulationLoop() {
 }
 
 export function updateDataVisualization() {
+    console.log("Updating viz at TR", tr, "data length:", subjectData.length);
+    if (subjectData.length === 0) console.warn("No data loaded yet");
     const tr = Math.floor(elements.audio.currentTime / TR_DURATION);
     if (tr >= subjectData.length) return;
 

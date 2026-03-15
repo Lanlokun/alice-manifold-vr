@@ -10,6 +10,7 @@ export function initializeSubjects() {
 
     subjects.forEach(subject => {
         const cursor = document.createElement('a-sphere');
+        console.log("Created cursor for", subject.id, "at default position");
         cursor.setAttribute('id', subject.id);
         cursor.setAttribute('radius', subject.radius);
         cursor.setAttribute('material', {

@@ -10,10 +10,10 @@ const SUBJECTS_CONFIG = {
         {
             id: 'subject0_llm',
             name: 'LLM Master Path',
-            color: '#ff4d00ff', // Gold for the "Universal Skeleton"
-            emissive: '#ff4d00ff',
-            radius: 0.06, // Slightly larger to act as an anchor
-            dataPrefix: 'llm_vr' // Matches your SBERT latent coordinates
+            color: '#FFFFFF', // Pure White
+            emissive: '#FFFFFF',
+            radius: 0.08, // Make it noticeably larger
+            dataPrefix: 'llm_vr'
         },
         {
             id: 'subject18',
