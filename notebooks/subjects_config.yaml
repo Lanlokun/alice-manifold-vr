@@ -1,0 +1,33 @@
+# Multi-Subject VR Data Generation Configuration
+# =============================================
+
+# Path to the ds002322 dataset
+data_path: "/home/lanlokun/Documents/Nankai University/FinalYear/THESIS/The Universal Narrative Engine/Datasets/ds002322"
+
+# Subjects to include in VR visualization
+subjects: 
+  - "18"  # Reference subject (blue)
+  - "22"  # Additional subject (green)
+  - "23"  # Additional subject (red) 
+  - "24"  # Additional subject (yellow)
+
+# Output file for VR-compatible JSON
+output_file: "../data/alice_4subjects_vr.json"
+
+# UMAP parameters for manifold generation
+umap_params:
+  n_components: 3
+  n_neighbors: 30
+  min_dist: 0.1
+  metric: "cosine"
+
+# Normalization parameters
+normalization:
+  method: "min_max"  # min_max or z_score
+  range: [0, 1]      # Target range for VR coordinates
+
+# Processing options
+processing:
+  random_seed: 42
+  alignment_method: "procrustes"  # procrustes or none
+  drift_calculation: "pairwise"   # pairwise or reference_based

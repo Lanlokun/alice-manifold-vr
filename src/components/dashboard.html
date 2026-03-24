@@ -1,0 +1,65 @@
+<div id="dashboard">
+    <div class="label">Timeline Navigation</div>
+    <input type="range" id="timeline" min="0" max="371" value="0">
+    <div style="display:flex; justify-content: space-between; font-family: monospace; font-size: 10px;">
+        <span id="current-time">00:00</span>
+        <span id="current-tr">TR 0</span>
+    </div>
+
+    <div class="label">Stimulus Audio Frequency</div>
+    <div id="audio-viz"></div>
+
+    <div class="label">Playback Controls</div>
+    <div class="btn-grid">
+        <button id="playBtn">Initialize Sync</button>
+        <button onclick="resetSim()">Reset Data</button>
+    </div>
+    <div class="tri-grid">
+        <button onclick="setSpeed(0.5)">0.5x</button>
+        <button onclick="setSpeed(1)">1.0x</button>
+        <button onclick="setSpeed(2)">2.0x</button>
+    </div>
+
+    <div class="label">Audio & Environment</div>
+    <input type="range" id="volumeControl" min="0" max="1" step="0.01" value="0.5">
+    <div class="btn-grid">
+        <button onclick="toggleShell()">Toggle Shell</button>
+        <button onclick="takeScreenshot()" style="border-color: #ff00ff; color: #ff00ff;">Capture VR</button>
+    </div>
+
+    <div class="label">Data Management</div>
+    <div class="btn-grid">
+        <button onclick="exportSession()" style="border-color: #22ff00; color: #22ff00;">Export JSON</button>
+        <button onclick="document.getElementById('fileInput').click()" style="border-color: #bbff00; color: #bbff00;">Import JSON</button>
+    </div>
+    
+    <div class="label">Stimulus & Subject</div>
+    <div class="btn-grid">
+        <button onclick="triggerAudioUpload()">Upload Audio</button>
+        <button onclick="triggerDataUpload()">Upload Subject JSON</button>
+    </div>
+    
+    <div class="label">Subject Management</div>
+    <div id="subject-list" class="subject-list">
+        <!-- Subjects will be dynamically added here -->
+    </div>
+    <div class="btn-grid">
+        <button onclick="showAddSubjectDialog()" style="border-color: #00ff88; color: #00ff88;">Add Subject</button>
+        <button onclick="toggleAllSubjects()" style="border-color: #ff8800; color: #ff8800;">Toggle All</button>
+    </div>
+    <div class="label">Alignment History (60s)</div>
+        <div id="drift-graph-container" style="height: 60px; background: #000; border: 1px solid #1a1a2e; position: relative; overflow: hidden; margin-bottom: 10px;">
+        <canvas id="driftCanvas" width="240" height="60"></canvas>
+    </div>
+
+    <input type="file" id="audioInput" accept="audio/*" style="display:none">
+    <input type="file" id="dataInput" accept=".json" style="display:none">
+    <input type="file" id="fileInput" style="display:none" onchange="importSession(event)">
+
+    <div class="live-stats">
+        DRIFT CURRENT <span id="drift-val" class="stat-val">0.0000</span><br>
+        DRIFT PEAK <span id="drift-peak" class="stat-val">0.0000</span><br>
+        VELOCITY <span id="velocity-val" class="stat-val">0.0000</span><br>
+        <div id="milestone-text" style="margin-top:8px; color:#888; border-top: 1px solid #333; padding-top:5px;">System Standby...</div>
+    </div>
+</div>
